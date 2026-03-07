@@ -789,11 +789,19 @@
         // ========== API HELPER ==========
         async function callAPI(action, params = {}) {
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, ...params })
+                // Use GET with query parameter to avoid CORS preflight
+                const payload = { action, ...params };
+                const url = API_URL + '?data=' + encodeURIComponent(JSON.stringify(payload));
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    redirect: 'follow'
                 });
+                
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+                }
+                
                 return await response.json();
             } catch (error) {
                 console.error('API Error:', error);
