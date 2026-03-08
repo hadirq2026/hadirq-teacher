@@ -9,6 +9,41 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
+    <script>
+        // --- KONFIGURASI GITHUB PAGES / EXTERNAL HOST ---
+        // Ganti URL ini dengan URL Web App Apps Script PETUGAS/TEACHER Anda
+        var GAS_WEB_APP_URL = "ISI_URL_WEB_APP_PETUGAS_DISINI";
+
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+            console.log("Menjalankan mode External Host (Github Pages)");
+            window.google = {
+                script: {
+                    get run() {
+                        var callData = { _success: null, _failure: null };
+                        return new Proxy(callData, {
+                            get: function (target, prop, receiver) {
+                                if (prop === 'withSuccessHandler') return function (cb) { target._success = cb; return receiver; };
+                                if (prop === 'withFailureHandler') return function (cb) { target._failure = cb; return receiver; };
+                                return function (...args) {
+                                    fetch(GAS_WEB_APP_URL, {
+                                        method: 'POST', redirect: 'follow',
+                                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                                        body: JSON.stringify({ action: prop, params: args })
+                                    })
+                                        .then(res => res.json())
+                                        .then(data => {
+                                            if (data.error) { if (target._failure) target._failure(new Error(data.error)); else console.error("GAS Error:", data.error); }
+                                            else { if (target._success) target._success(data.result); }
+                                        })
+                                        .catch(err => { if (target._failure) target._failure(err); else console.error("Network Error:", err); });
+                                };
+                            }
+                        });
+                    }
+                }
+            };
+        }
+    </script>
     <style>
         :root {
             --primary: #6366f1;
@@ -990,13 +1025,7 @@
         }
 
         function isCameraBlockedByPolicy() {
-            const policy = document.permissionsPolicy || document.featurePolicy;
-            if (!policy || typeof policy.allowsFeature !== 'function') return false;
-            try {
-                return !policy.allowsFeature('camera');
-            } catch (e) {
-                return false;
-            }
+            return false; // Dinonaktifkan untuk mencegah false positive pada iframe Apps Script
         }
 
         function initCameraAvailability() {
@@ -1228,9 +1257,22 @@
                 scanner = new Html5Qrcode("reader");
             }
 
+            const videoConstraintsObj = {
+                facingMode: 'environment',
+                width: { ideal: 1280, min: 640 },
+                height: { ideal: 720, min: 480 }
+            };
+
+            const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+                let minEdgePercentage = 0.7; // 70%
+                let minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                let qrboxSize = Math.max(150, Math.floor(minEdgeSize * minEdgePercentage));
+                return { width: qrboxSize, height: qrboxSize };
+            };
+
             scanner.start(
                 { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
+                { fps: 15, qrbox: qrboxFunction, videoConstraints: videoConstraintsObj },
                 (decodedText) => {
                     handleScanSuccess(decodedText);
                 },
